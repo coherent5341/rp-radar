@@ -82,9 +82,15 @@ range information at all.
 
 Verified here:
 
-- The DSP passes 123 checks against synthetic data with known ground truth,
+- The DSP passes 152 checks against synthetic data with known ground truth,
   including an end-to-end golf shot (club 42 m/s, ball 60 m/s, smash 1.43) and
   correct unwrapping of a 60 m/s target from a ±24.8 m/s window.
+- Speed estimation error of 0.034 m/s RMS, 0.068 m/s worst, measured over the
+  `ball_speed` configuration with the true speed swept across every sub-bin
+  position. The 2.75 m/s bin width is the two-target separation limit, not the
+  accuracy on a single peak — see the accuracy section of
+  `docs/03-radar-config-and-theory.md`, which also explains why alignment, not
+  resolution, is what actually limits a real measurement.
 - All three applications compile and link clean for Cortex-M33 (v8-M.mainline,
   FPv5/FP-D16) with `-Wall -Wextra -Wshadow`, and produce UF2 images.
 

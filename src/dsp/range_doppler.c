@@ -29,8 +29,53 @@ void rd_process(rd_t *rd, const iq16_t *frame, float *map)
 	psd_process(&rd->psd, frame, rd->num_points, map);
 }
 
+/* Two detections are the same target if they agree in range and in speed. */
+static bool near_in_both(const rd_det_t *a, const rd_det_t *b, uint16_t guard,
+                         uint16_t range_guard)
+{
+	const uint16_t range_separation =
+	    (a->point > b->point) ? (uint16_t)(a->point - b->point) : (uint16_t)(b->point - a->point);
+
+	if (range_separation > range_guard)
+	{
+		return false;
+	}
+
+	const float bin_separation = (a->bin > b->bin) ? (a->bin - b->bin) : (b->bin - a->bin);
+
+	return bin_separation <= (float)guard;
+}
+
+/*
+ * Sub-gate range from the neighbouring gates at the same Doppler bin. Only
+ * attempted where the peak really is a local maximum along range; on the
+ * shoulder of a target centred elsewhere the fit is meaningless, and that
+ * detection is about to be suppressed anyway.
+ */
+static float interpolated_point(const rd_t *rd, const float *map, uint16_t point, uint16_t bin)
+{
+	if (point == 0u || (point + 1u) >= rd->num_points)
+	{
+		return (float)point;
+	}
+
+	const uint16_t n = rd->psd.seg_len;
+	const float    below = map[((uint32_t)(point - 1u) * n) + bin];
+	const float    here  = map[((uint32_t)point * n) + bin];
+	const float    above = map[((uint32_t)(point + 1u) * n) + bin];
+
+	if (here <= below || here <= above)
+	{
+		return (float)point;
+	}
+
+	const float triplet[3] = {below, here, above};
+
+	return (float)point + (peak_parabolic_log(triplet, 1u, 3u) - 1.0f);
+}
+
 uint16_t rd_detect(rd_t *rd, const float *map, float threshold_rel, float min_speed_mps,
-                   uint16_t guard, rd_det_t *out, uint16_t max_out)
+                   uint16_t guard, uint16_t range_guard, rd_det_t *out, uint16_t max_out)
 {
 	const uint16_t n = rd->psd.seg_len;
 
@@ -83,14 +128,57 @@ uint16_t rd_detect(rd_t *rd, const float *map, float threshold_rel, float min_sp
 
 		for (uint16_t p = 0; p < found; p++)
 		{
+			uint16_t raw_bin = (uint16_t)lrintf(peaks[p].bin);
+
+			if (raw_bin >= n)
+			{
+				raw_bin = (uint16_t)(n - 1u);
+			}
+
 			rd_det_t det;
 
-			det.range_m   = rd->start_m + ((float)point * rd->step_m);
+			det.range_m =
+			    rd->start_m + (interpolated_point(rd, map, point, raw_bin) * rd->step_m);
 			det.speed_mps = psd_bin_to_speed(&rd->psd, peaks[p].bin);
 			det.power     = peaks[p].power;
 			det.snr       = peaks[p].snr;
 			det.point     = point;
 			det.bin       = peaks[p].bin;
+
+			/*
+			 * Suppress against anything stronger that is close in both range
+			 * and Doppler: that is the same physical target seen in an
+			 * adjacent gate, not a second object.
+			 */
+			bool suppressed = false;
+
+			for (uint16_t k = 0; k < count; k++)
+			{
+				if (near_in_both(&out[k], &det, guard, range_guard) &&
+				    out[k].power >= det.power)
+				{
+					suppressed = true;
+					break;
+				}
+			}
+
+			if (suppressed)
+			{
+				continue;
+			}
+
+			/* This one is stronger, so drop the duplicates it displaces. */
+			uint16_t write = 0u;
+
+			for (uint16_t k = 0; k < count; k++)
+			{
+				if (near_in_both(&out[k], &det, guard, range_guard))
+				{
+					continue;
+				}
+				out[write++] = out[k];
+			}
+			count = write;
 
 			/* Keep the strongest max_out detections across the whole map. */
 			uint16_t pos = count;

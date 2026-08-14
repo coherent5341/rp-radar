@@ -238,6 +238,24 @@ void test_peaks(void)
 	CHECK_NEAR(peak_parabolic(symmetric, 0u, 5u), 0.0, 1e-9);
 	CHECK_NEAR(peak_parabolic(symmetric, 4u, 5u), 4.0, 1e-9);
 
+	/*
+	 * The log-domain variant agrees on a symmetric peak and, like the linear
+	 * one, declines to extrapolate past half a bin.
+	 */
+	const float positive[5] = {1.0f, 4.0f, 16.0f, 4.0f, 1.0f};
+	CHECK_NEAR(peak_parabolic_log(positive, 2u, 5u), 2.0, 1e-6);
+	CHECK_NEAR(peak_parabolic_log(positive, 0u, 5u), 0.0, 1e-9);
+
+	const float skewed_positive[5] = {1.0f, 4.0f, 16.0f, 8.0f, 1.0f};
+	CHECK(peak_parabolic_log(skewed_positive, 2u, 5u) > 2.0f);
+	CHECK(peak_parabolic_log(skewed_positive, 2u, 5u) <= 2.5f);
+
+	/* A zero neighbour must be floored, not turned into -inf or NaN. */
+	const float with_zero[3] = {0.0f, 9.0f, 1.0f};
+	const float located      = peak_parabolic_log(with_zero, 1u, 3u);
+	CHECK(located >= 0.5f);
+	CHECK(located <= 1.5f);
+
 	/* Two well-separated peaks, both above threshold, strongest reported first. */
 	float spectrum[32];
 	for (uint16_t i = 0; i < 32u; i++)
@@ -283,5 +301,109 @@ void test_peaks(void)
 	if (found == 1u)
 	{
 		CHECK_NEAR(peaks[0].bin, 23.0, 0.2);
+	}
+}
+
+/*
+ * How accurately the ball speed chain recovers a known speed.
+ *
+ * The raw bin is 2.75 m/s wide, but that is not the accuracy: interpolating the
+ * peak recovers a small fraction of a bin. The truth is stepped by an amount
+ * that does not divide the bin width, so every sub-bin position gets sampled
+ * and any interpolation bias shows up rather than averaging away.
+ *
+ * Bounds are set well above what was measured (0.034 m/s RMS, 0.068 m/s worst)
+ * so this catches a regression rather than failing on floating-point drift
+ * between toolchains.
+ */
+void test_interpolation_accuracy(void)
+{
+	enum
+	{
+		SPF      = 128u,
+		SEGMENTS = 2u,
+		SEG_LEN  = 64u
+	};
+	const float sweep_rate = 71000.0f;
+	const float range_m    = 0.80f;
+
+	psd_t psd;
+	CHECK(psd_init(&psd, SPF, SEGMENTS, sweep_rate, true));
+
+	static iq16_t frame[SPF];
+	static float  spectrum[SEG_LEN];
+	static float  scratch[SEG_LEN];
+
+	double   interpolated_sq = 0.0;
+	double   raw_bin_sq      = 0.0;
+	double   worst           = 0.0;
+	uint16_t measured        = 0u;
+	uint16_t attempted       = 0u;
+
+	for (float truth = 30.0f; truth <= 85.0f; truth += 0.37f)
+	{
+		synth_t synth;
+		synth_init(&synth, 1u, SPF, range_m, 0.30f, sweep_rate,
+		           1000u + (uint64_t)(truth * 97.0f));
+		synth.clutter_range_m   = range_m;
+		synth.clutter_amplitude = 6000.0f;
+		synth.noise_sigma       = 60.0f;
+
+		const synth_target_t target = {
+		    .range_m = range_m, .speed_mps = truth, .amplitude = 1500.0f, .fwhm_m = 0.32f};
+
+		synth_frame(&synth, &target, 1u, frame);
+		psd_process(&psd, frame, 1u, spectrum);
+
+		attempted++;
+
+		const float    median = peak_median(spectrum, SEG_LEN, scratch);
+		peak_t         peaks[PEAKS_MAX];
+		const uint16_t found =
+		    peak_find(spectrum, SEG_LEN, median, 10.0f, 2u, 0u, 0u, peaks, PEAKS_MAX);
+
+		if (found == 0u)
+		{
+			continue;
+		}
+
+		const float speed   = fabsf(psd_bin_to_speed(&psd, peaks[0].bin));
+		const float nearest = fabsf(psd_bin_to_speed(&psd, (float)lrintf(peaks[0].bin)));
+
+		/* Ignore the rare frame where the strongest peak is not the target. */
+		if (fabsf(speed - truth) > 6.0f)
+		{
+			continue;
+		}
+
+		const double error = (double)speed - (double)truth;
+
+		interpolated_sq += error * error;
+		raw_bin_sq += ((double)nearest - (double)truth) * ((double)nearest - (double)truth);
+
+		if (fabs(error) > worst)
+		{
+			worst = fabs(error);
+		}
+
+		measured++;
+	}
+
+	/* Nearly every trial should yield a usable estimate at this SNR. */
+	CHECK(measured > (uint16_t)((attempted * 9u) / 10u));
+
+	if (measured > 0u)
+	{
+		const double rms     = sqrt(interpolated_sq / (double)measured);
+		const double raw_rms = sqrt(raw_bin_sq / (double)measured);
+
+		CHECK(rms < 0.10);
+		CHECK(worst < 0.20);
+
+		/*
+		 * The whole point of interpolating: it must be far better than simply
+		 * taking the peak bin, which is where the 2.75 m/s figure comes from.
+		 */
+		CHECK(raw_rms > (rms * 5.0));
 	}
 }

@@ -55,7 +55,7 @@ void test_range_doppler(void)
 	rd_process(&rd, g_frame, g_map);
 
 	rd_det_t       dets[8];
-	const uint16_t found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, dets, 8u);
+	const uint16_t found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, 1u, dets, 8u);
 
 	CHECK(found >= 2u);
 	CHECK(has_detection(dets, found, 0.90f, -8.0f, 0.13f, 2.0f));
@@ -69,10 +69,107 @@ void test_range_doppler(void)
 	}
 
 	/* Raising the speed mask above the club's speed must drop it. */
-	const uint16_t masked = rd_detect(&rd, g_map, 12.0f, 10.0f, 2u, dets, 8u);
+	const uint16_t masked = rd_detect(&rd, g_map, 12.0f, 10.0f, 2u, 1u, dets, 8u);
 	CHECK(masked >= 1u);
 	CHECK(!has_detection(dets, masked, 0.90f, -8.0f, 0.13f, 2.0f));
 	CHECK(has_detection(dets, masked, 1.50f, 14.0f, 0.13f, 2.0f));
+}
+
+/*
+ * A target is wider than one range gate, so without cross-range suppression it
+ * is detected in every gate it touches. Those duplicates share a speed and
+ * differ only in range, so the tracker treats them as separate objects: before
+ * this was handled, one club head produced three detections and consumed three
+ * of the four track slots, leaving nowhere for the ball to go.
+ */
+void test_detection_merging(void)
+{
+	rd_t rd;
+	CHECK(rd_init(&rd, TRK_POINTS, TRK_SPF, TRK_SWEEP_RATE, TRK_START_M, TRK_STEP_M));
+
+	rd_det_t dets[8];
+
+	/* One target, wherever it sits relative to the gate grid, is one detection. */
+	for (float range = 0.90f; range <= 1.021f; range += 0.03f)
+	{
+		synth_t synth;
+		synth_init(&synth, TRK_POINTS, TRK_SPF, TRK_START_M, TRK_STEP_M, TRK_SWEEP_RATE, 777u);
+		synth.clutter_range_m   = 0.42f;
+		synth.clutter_amplitude = 8000.0f;
+		synth.noise_sigma       = 50.0f;
+
+		const synth_target_t target = {
+		    .range_m = range, .speed_mps = -8.0f, .amplitude = 5000.0f, .fwhm_m = 0.14f};
+
+		synth_frame(&synth, &target, 1u, g_frame);
+		rd_process(&rd, g_frame, g_map);
+
+		const uint16_t found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, 1u, dets, 8u);
+
+		CHECK(found == 1u);
+
+		if (found >= 1u)
+		{
+			/*
+			 * And the range is interpolated between gates rather than snapped
+			 * to the 0.12 m grid, where the error would be up to 0.06 m.
+			 */
+			CHECK_NEAR(dets[0].range_m, range, 0.03);
+		}
+	}
+
+	/* Suppression is two-dimensional: same gate, different speeds stays two. */
+	synth_t synth;
+	synth_init(&synth, TRK_POINTS, TRK_SPF, TRK_START_M, TRK_STEP_M, TRK_SWEEP_RATE, 2468u);
+	synth.clutter_range_m   = 0.42f;
+	synth.clutter_amplitude = 8000.0f;
+	synth.noise_sigma       = 50.0f;
+
+	const synth_target_t same_range[2] = {
+	    {.range_m = 0.90f, .speed_mps = -8.0f, .amplitude = 5000.0f, .fwhm_m = 0.14f},
+	    {.range_m = 0.90f, .speed_mps = 16.0f, .amplitude = 3000.0f, .fwhm_m = 0.14f},
+	};
+
+	synth_frame(&synth, same_range, 2u, g_frame);
+	rd_process(&rd, g_frame, g_map);
+
+	uint16_t found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, 1u, dets, 8u);
+	CHECK(found == 2u);
+	CHECK(has_detection(dets, found, 0.90f, -8.0f, 0.06f, 2.0f));
+	CHECK(has_detection(dets, found, 0.90f, 16.0f, 0.06f, 2.0f));
+
+	/* And two targets far apart in range are still two. */
+	const synth_target_t separated[2] = {
+	    {.range_m = 0.90f, .speed_mps = -8.0f, .amplitude = 5000.0f, .fwhm_m = 0.14f},
+	    {.range_m = 1.62f, .speed_mps = -8.0f, .amplitude = 3000.0f, .fwhm_m = 0.14f},
+	};
+
+	synth_init(&synth, TRK_POINTS, TRK_SPF, TRK_START_M, TRK_STEP_M, TRK_SWEEP_RATE, 1357u);
+	synth.clutter_range_m   = 0.42f;
+	synth.clutter_amplitude = 8000.0f;
+	synth.noise_sigma       = 50.0f;
+
+	synth_frame(&synth, separated, 2u, g_frame);
+	rd_process(&rd, g_frame, g_map);
+
+	found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, 1u, dets, 8u);
+	CHECK(found == 2u);
+	CHECK(has_detection(dets, found, 0.90f, -8.0f, 0.06f, 2.0f));
+	CHECK(has_detection(dets, found, 1.62f, -8.0f, 0.06f, 2.0f));
+
+	/* Passing 0 must switch cross-range suppression off. */
+	synth_init(&synth, TRK_POINTS, TRK_SPF, TRK_START_M, TRK_STEP_M, TRK_SWEEP_RATE, 777u);
+	synth.clutter_range_m   = 0.42f;
+	synth.clutter_amplitude = 8000.0f;
+	synth.noise_sigma       = 50.0f;
+
+	const synth_target_t single = {
+	    .range_m = 0.90f, .speed_mps = -8.0f, .amplitude = 5000.0f, .fwhm_m = 0.14f};
+
+	synth_frame(&synth, &single, 1u, g_frame);
+	rd_process(&rd, g_frame, g_map);
+
+	CHECK(rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, 0u, dets, 8u) > 1u);
 }
 
 void test_dealias(void)
@@ -184,7 +281,7 @@ void test_tracker(void)
 		rd_process(&rd, g_frame, g_map);
 
 		rd_det_t       dets[8];
-		const uint16_t found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, dets, 8u);
+		const uint16_t found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, 1u, dets, 8u);
 
 		float       confidence = 0.0f;
 		const float coarse     = rd_range_walk_speed(&rd, g_frame, 4u, &confidence);
@@ -228,7 +325,7 @@ void test_tracker(void)
 		rd_process(&rd, g_frame, g_map);
 
 		rd_det_t       dets[8];
-		const uint16_t found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, dets, 8u);
+		const uint16_t found = rd_detect(&rd, g_map, 12.0f, 2.0f, 2u, 1u, dets, 8u);
 
 		float       confidence = 0.0f;
 		const float coarse     = rd_range_walk_speed(&rd, g_frame, 4u, &confidence);

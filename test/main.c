@@ -12,6 +12,8 @@ int main(void)
 	RUN(test_psd);
 	RUN(test_peaks);
 	RUN(test_range_doppler);
+	RUN(test_detection_merging);
+	RUN(test_interpolation_accuracy);
 	RUN(test_dealias);
 	RUN(test_range_walk);
 	RUN(test_tracker);

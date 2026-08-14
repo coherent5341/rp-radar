@@ -35,11 +35,17 @@
 
 typedef struct
 {
+	/**
+	 * Interpolated across the range axis, so this is not restricted to the
+	 * range gate grid. The profile envelope is close to Gaussian and a Gaussian
+	 * is a parabola in the log domain, so fitting the neighbouring gates
+	 * recovers well under a gate of position when the return is strong.
+	 */
 	float    range_m;
 	float    speed_mps; /**< Folded speed, straight from the Doppler axis. */
 	float    power;
 	float    snr;
-	uint16_t point; /**< Range bin index. */
+	uint16_t point; /**< Range bin the peak was found in. */
 	float    bin;   /**< Fractional Doppler bin. */
 } rd_det_t;
 
@@ -77,11 +83,20 @@ void rd_process(rd_t *rd, const iq16_t *frame, float *map);
  *        range bin's spectrum.
  * @param min_speed_mps Speeds below this magnitude are masked out, removing the
  *        static scene without disturbing anything that is actually moving.
- * @param guard Doppler bins of non-maximum suppression within a range bin.
+ * @param guard Doppler bins of non-maximum suppression.
+ * @param range_guard Range gates of non-maximum suppression. A target wider
+ *        than one gate — which any target is, since the profile envelope is
+ *        sampled without gaps — otherwise appears as a detection in each gate
+ *        it touches. Those duplicates share a speed but differ in range, so the
+ *        tracker treats them as separate objects and a single club head can
+ *        occupy every track slot. Suppression applies only when a candidate is
+ *        close in *both* range and Doppler, so two genuinely different targets
+ *        at the same range but different speeds are still reported separately.
+ *        1 suits the shipped configuration; 0 disables it.
  * @return Number of detections written, sorted by descending power.
  */
 uint16_t rd_detect(rd_t *rd, const float *map, float threshold_rel, float min_speed_mps,
-                   uint16_t guard, rd_det_t *out, uint16_t max_out);
+                   uint16_t guard, uint16_t range_guard, rd_det_t *out, uint16_t max_out);
 
 /**
  * Coarse, alias-free speed from range walk within a single frame.

@@ -37,6 +37,24 @@ float peak_median(const float *x, uint16_t n, float *scratch);
 float peak_parabolic(const float *y, uint16_t i, uint16_t n);
 
 /**
+ * As peak_parabolic, but fitting the parabola to the logarithm of the samples.
+ *
+ * This is the one to use on a power spectrum. A Hann-windowed tone has a main
+ * lobe that is close to Gaussian, and a Gaussian is exactly a parabola in the
+ * log domain, so the fit matches the shape it is fitting. Fitting linear power
+ * instead leaves a systematic error of about 0.08 bins that does not improve
+ * with SNR, because it is bias rather than noise.
+ *
+ * Measured over the ball_speed configuration with the target speed swept
+ * across all sub-bin positions: 0.224 m/s RMS for the linear fit against
+ * 0.034 m/s for this one, with the linear figure flat from SNR 11000 down to
+ * SNR 200. See test_interpolation_accuracy.
+ *
+ * Samples must be non-negative; zeros are floored rather than producing -inf.
+ */
+float peak_parabolic_log(const float *y, uint16_t i, uint16_t n);
+
+/**
  * Find local maxima that exceed @p median * @p threshold_rel.
  *
  * @param exclude_lo,exclude_hi Half-open bin range to ignore, used to mask the

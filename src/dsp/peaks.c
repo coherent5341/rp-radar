@@ -1,5 +1,6 @@
 #include "peaks.h"
 
+#include <math.h>
 #include <string.h>
 
 /* Partial sort: places the k-th smallest element of x[0..n) at index k. */
@@ -108,6 +109,39 @@ float peak_parabolic(const float *y, uint16_t i, uint16_t n)
 	return (float)i + delta;
 }
 
+float peak_parabolic_log(const float *y, uint16_t i, uint16_t n)
+{
+	if (i == 0u || i + 1u >= n)
+	{
+		return (float)i;
+	}
+
+	/* Floor rather than clamp: a zero bin should sit far below, not alongside. */
+	const float y1 = logf(y[i - 1u] + 1e-30f);
+	const float y2 = logf(y[i] + 1e-30f);
+	const float y3 = logf(y[i + 1u] + 1e-30f);
+
+	const float denom = (y1 - (2.0f * y2)) + y3;
+
+	if (denom == 0.0f)
+	{
+		return (float)i;
+	}
+
+	float delta = (0.5f * (y1 - y3)) / denom;
+
+	if (delta > 0.5f)
+	{
+		delta = 0.5f;
+	}
+	else if (delta < -0.5f)
+	{
+		delta = -0.5f;
+	}
+
+	return (float)i + delta;
+}
+
 uint16_t peak_find(const float *spectrum, uint16_t n, float median, float threshold_rel,
                    uint16_t guard, uint16_t exclude_lo, uint16_t exclude_hi,
                    peak_t *out, uint16_t max_out)
@@ -181,7 +215,7 @@ uint16_t peak_find(const float *spectrum, uint16_t n, float median, float thresh
 
 		peak_t candidate;
 
-		candidate.bin   = peak_parabolic(spectrum, i, n);
+		candidate.bin   = peak_parabolic_log(spectrum, i, n);
 		candidate.power = spectrum[i];
 		candidate.snr   = (median > 0.0f) ? (spectrum[i] / median) : 0.0f;
 

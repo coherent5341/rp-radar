@@ -48,6 +48,8 @@ void test_fft(void);
 void test_psd(void);
 void test_peaks(void);
 void test_range_doppler(void);
+void test_detection_merging(void);
+void test_interpolation_accuracy(void);
 void test_dealias(void);
 void test_range_walk(void);
 void test_tracker(void);

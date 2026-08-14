@@ -158,6 +158,78 @@ lives entirely at zero Doppler; removing the mean removes it, instead of leaving
 a large peak whose window sidelobes spread across the band. `test_psd` checks
 both halves of that claim.
 
+## Resolution is not accuracy
+
+The bin width — 2.75 m/s for `ball_speed`, 1.55 m/s for `swing_tracker` — is
+how far apart two targets must be to appear as two peaks. It is *not* how
+accurately a single isolated peak can be located, which is much better, because
+the peak's shape across neighbouring bins says where inside the bin it sits.
+
+Measured over the shipped `ball_speed` configuration, with the true speed swept
+from 30 to 85 m/s in steps that do not divide the bin width so every sub-bin
+position is sampled (`test_interpolation_accuracy`):
+
+| estimator | RMS error | worst |
+|---|---|---|
+| nearest bin | 0.79 m/s | 1.35 m/s |
+| parabola on power | 0.224 m/s | 0.33 m/s |
+| **parabola on log power** (shipped) | **0.034 m/s** | **0.068 m/s** |
+
+0.034 m/s RMS is 0.06% at a 60 m/s ball speed. For comparison, commercial
+launch monitors quote ball speed to about ±0.45 m/s.
+
+The middle row is worth dwelling on, because it explains the choice. Its error
+stayed at 0.224 m/s across an SNR sweep from 11000 down to 200 — an error that
+does not improve with SNR is bias, not noise. It comes from fitting a parabola
+to the wrong shape: a Hann-windowed tone's main lobe is close to Gaussian, and
+a Gaussian is exactly a parabola in the *log* domain, not the linear one.
+Taking the log first removes the bias for a handful of instructions.
+
+Below roughly SNR 30 the two estimators converge, because noise then dominates
+the bias; and below about SNR 14 detection itself fails, since the threshold is
+a multiple of the median. At that point the limit is sensitivity, not
+interpolation — more HWAAS, a shorter range, or a lower threshold.
+
+The same applies along the range axis. `rd_detect` interpolates range across
+neighbouring gates, so reported range is not restricted to the 0.12 m grid: a
+target at 0.96 m reads 0.95 m rather than snapping to 0.90 m.
+
+### So what actually limits the measurement
+
+Not the resolution. In rough order of size for a real shot:
+
+1. **Alignment.** Radial speed is `v cos(theta)`. At 20° off the ball's line
+   you lose 6%, which at 60 m/s is 3.6 m/s — a hundred times the estimator
+   error. This dominates everything else and no amount of signal processing
+   fixes it; it is a mounting problem.
+2. **The club is not a point.** Its head, hosel and shaft are at different
+   radii and so at genuinely different speeds, spreading its return over
+   several m/s. Club-head speed from a Doppler peak is really the speed of the
+   fastest strong scattering centre, which is about what you want, but expect
+   it to be noisier than the ball figure. The ball, being a sphere whose return
+   is dominated by the specular point, is the cleaner target of the two.
+3. **Dwell.** The ball is in the beam for around 5 ms, so a handful of frames.
+   Catching its peak reliably matters more than measuring any one frame better.
+
+Which is why the recommendation is: get the sensor on the target line first,
+and only then worry about resolution.
+
+### If you do want more
+
+- **Longer coherent integration.** Resolution is `sweep_rate / N`. Setting
+  `PSD_SEGMENTS` to 1 in `ball_speed` doubles N to 128 and halves the bin to
+  1.37 m/s, at the cost of the averaging that steadies the peak. Going further
+  means longer frames, which is bounded by the ball's ~5 ms dwell — beyond
+  about 256 sweeps (3.6 ms) you are integrating over an interval where the
+  ball is leaving the beam, and the amplitude taper broadens the peak again.
+  Measured RMS at 256 sweeps was 0.007 m/s, which is far below what the
+  alignment error makes meaningful.
+- **Finer range.** Range resolution is set by the profile envelope, not the
+  gate spacing: profile 2 is 0.07 m against profile 3's 0.14 m. It costs loop
+  gain, and needs twice the points for the same span, which costs sweep rate.
+- **More sensitivity.** HWAAS is the direct knob, and it is what the sweep rate
+  is competing for.
+
 ## Choosing your own configuration
 
 `radar_math.h` has the pieces:

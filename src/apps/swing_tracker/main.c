@@ -41,6 +41,8 @@
 #define MIN_SPEED_MPS 1.5f
 /* Doppler bins of non-maximum suppression within a range bin. */
 #define DOPPLER_GUARD 2u
+/* Range gates of suppression, so one target is one detection, not three. */
+#define RANGE_GUARD 1u
 #define MAX_DETECTIONS 8u
 /* Range walk is only trusted when one target dominates the frame. */
 #define COARSE_CONFIDENCE_MIN 0.35f
@@ -152,7 +154,7 @@ int main(void)
 
 		rd_det_t       detections[MAX_DETECTIONS];
 		const uint16_t num_dets = rd_detect(&g_rd, g_map, DETECTION_THRESHOLD, MIN_SPEED_MPS,
-		                                    DOPPLER_GUARD, detections, MAX_DETECTIONS);
+		                                    DOPPLER_GUARD, RANGE_GUARD, detections, MAX_DETECTIONS);
 
 		float coarse_confidence = 0.0f;
 		float coarse_mps        = 0.0f;
