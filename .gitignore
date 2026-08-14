@@ -1,0 +1,14 @@
+build/
+build-*/
+*.uf2
+*.elf
+*.bin
+*.hex
+*.dis
+*.map
+__pycache__/
+*.pyc
+*.csv
+.vscode/
+.idea/
+compile_commands.json
