@@ -48,28 +48,29 @@ find_path(ACCONEER_RSS_INCLUDE_DIR
     NO_CMAKE_FIND_ROOT_PATH
 )
 
+#
+# A missing SDK must not fail configure.
+#
+# Failing here would leave no build.ninja behind, and the Pico VS Code
+# extension's build task only runs ninja, so the user would see nothing but
+# "loading 'build.ninja': The system cannot find the file specified" with no
+# hint as to the real cause. Report it instead and let the top-level
+# CMakeLists turn it into a build-time error that actually says what is wrong.
+#
+set(ACCONEER_RSS_FOUND TRUE)
+set(ACCONEER_RSS_PROBLEM "")
+
 if(NOT ACCONEER_RSS_INCLUDE_DIR)
-    message(FATAL_ERROR
-        "Could not find the Acconeer RSS headers (looked for acc_rss_a121.h).\n"
-        "Either configure with -DACCONEER_RSS_DIR=/path/to/the/unpacked/A121/"
-        "Cortex-M33/SDK, or set ACCONEER_RSS_DIR as an environment variable, "
-        "which is what the Pico VS Code extension needs since it passes no "
-        "configure arguments of its own.\n"
-        "ACCONEER_RSS_DIR is currently \"${ACCONEER_RSS_DIR}\".\n"
-        "See docs/02-rss-library.md for where to get the SDK.")
+    set(ACCONEER_RSS_FOUND FALSE)
+    if(ACCONEER_RSS_DIR)
+        set(ACCONEER_RSS_PROBLEM
+            "ACCONEER_RSS_DIR is set to '${ACCONEER_RSS_DIR}' but acc_rss_a121.h is not under it")
+    else()
+        set(ACCONEER_RSS_PROBLEM "ACCONEER_RSS_DIR is not set")
+    endif()
 endif()
 
-add_library(acconeer_rss_iface INTERFACE)
-target_include_directories(acconeer_rss_iface INTERFACE ${ACCONEER_RSS_INCLUDE_DIR})
-
-if(RP_RADAR_RSS_STUB)
-    message(WARNING
-        "RP_RADAR_RSS_STUB is on: linking a do-nothing stub. The firmware will "
-        "build but will not talk to a sensor.")
-
-    add_library(acconeer_rss STATIC ${CMAKE_CURRENT_LIST_DIR}/../tools/rss_stub/rss_stub.c)
-    target_link_libraries(acconeer_rss PUBLIC acconeer_rss_iface)
-else()
+if(ACCONEER_RSS_FOUND AND NOT RP_RADAR_RSS_STUB)
     find_library(ACCONEER_RSS_LIBRARY
         NAMES acconeer_a121 libacconeer_a121
         HINTS
@@ -81,21 +82,32 @@ else()
     )
 
     if(NOT ACCONEER_RSS_LIBRARY)
-        message(FATAL_ERROR
-            "Found the RSS headers at ${ACCONEER_RSS_INCLUDE_DIR} but not "
-            "libacconeer_a121.a.\n"
-            "Make sure you downloaded the Cortex-M33 build of the SDK, not the "
-            "ESP32, Cortex-M0 or Cortex-M4 one.\n"
-            "To check that everything else builds without it, configure with "
-            "-DRP_RADAR_RSS_STUB=ON.")
+        set(ACCONEER_RSS_FOUND FALSE)
+        set(ACCONEER_RSS_PROBLEM
+            "found the RSS headers at ${ACCONEER_RSS_INCLUDE_DIR} but no "
+            "libacconeer_a121.a alongside them -- check you downloaded the "
+            "Cortex-M33 build, not the ESP32, Cortex-M0 or Cortex-M4 one")
     endif()
-
-    add_library(acconeer_rss INTERFACE)
-    target_link_libraries(acconeer_rss INTERFACE acconeer_rss_iface ${ACCONEER_RSS_LIBRARY})
-
-    message(STATUS "Acconeer RSS library: ${ACCONEER_RSS_LIBRARY}")
 endif()
 
-message(STATUS "Acconeer RSS headers: ${ACCONEER_RSS_INCLUDE_DIR}")
+if(ACCONEER_RSS_FOUND)
+    add_library(acconeer_rss_iface INTERFACE)
+    target_include_directories(acconeer_rss_iface INTERFACE ${ACCONEER_RSS_INCLUDE_DIR})
 
-add_library(acconeer::rss ALIAS acconeer_rss)
+    if(RP_RADAR_RSS_STUB)
+        message(WARNING
+            "RP_RADAR_RSS_STUB is on: linking a do-nothing stub. The firmware will "
+            "build but will not talk to a sensor.")
+
+        add_library(acconeer_rss STATIC ${CMAKE_CURRENT_LIST_DIR}/../tools/rss_stub/rss_stub.c)
+        target_link_libraries(acconeer_rss PUBLIC acconeer_rss_iface)
+    else()
+        add_library(acconeer_rss INTERFACE)
+        target_link_libraries(acconeer_rss INTERFACE acconeer_rss_iface ${ACCONEER_RSS_LIBRARY})
+
+        message(STATUS "Acconeer RSS library: ${ACCONEER_RSS_LIBRARY}")
+    endif()
+
+    add_library(acconeer::rss ALIAS acconeer_rss)
+    message(STATUS "Acconeer RSS headers: ${ACCONEER_RSS_INCLUDE_DIR}")
+endif()

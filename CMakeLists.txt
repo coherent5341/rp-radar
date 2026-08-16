@@ -53,6 +53,46 @@ pico_sdk_init()
 
 include(cmake/FindAcconeerRSS.cmake)
 
+#
+# Without RSS there is no sensor driver and so no firmware to build. Configure
+# still succeeds, deliberately: a hard failure here would leave no build.ninja,
+# and the Pico VS Code extension's build task runs only ninja, so the sole
+# symptom would be "loading 'build.ninja': The system cannot find the file
+# specified" -- which says nothing about the actual cause. Generating a target
+# that fails loudly puts the explanation where the user is already looking.
+#
+if(NOT ACCONEER_RSS_FOUND)
+    message(WARNING
+        "Acconeer RSS not found, so no firmware targets will be created "
+        "(${ACCONEER_RSS_PROBLEM}). The build will stop with instructions. "
+        "See docs/02-rss-library.md.")
+
+    add_custom_target(rss_missing ALL
+        COMMAND ${CMAKE_COMMAND} -E cmake_echo_color --red --bold
+                "The Acconeer A121 RSS library is required to build this firmware."
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "  Problem: ${ACCONEER_RSS_PROBLEM}"
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "  RSS is the A121's driver and is closed source, so it cannot be"
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "  shipped here. Download the Cortex-M33 build from Acconeer, then"
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "  either set the ACCONEER_RSS_DIR environment variable and"
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "  reconfigure, or pass -DACCONEER_RSS_DIR=... to cmake."
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "  Details: docs/02-rss-library.md"
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "  No sensor SDK yet? The host DSP tests need neither it nor the"
+        COMMAND ${CMAKE_COMMAND} -E echo
+                "  Pico SDK: cmake -S test -B build-test && cmake --build build-test"
+        COMMAND ${CMAKE_COMMAND} -E false
+        VERBATIM
+    )
+
+    return()
+endif()
+
 # --- Portable signal processing -------------------------------------------
 # No Pico SDK and no RSS dependency, so the same sources build for the host
 # test suite. Keep it that way.
