@@ -39,6 +39,72 @@ The build looks for `acc_rss_a121.h` and `libacconeer_a121.a`, accepting either
 the SDK's own `rss/include` and `rss/lib` layout or a flattened `include`/`lib`
 one. If it cannot find them, it says which one is missing.
 
+## Pointing the build at it
+
+Either pass it at configure time:
+
+```sh
+cmake -S . -B build -DACCONEER_RSS_DIR=/path/to/acconeer_a121_cortex_m33
+```
+
+or set it once in the environment, which is the only option that works with the
+Raspberry Pi Pico VS Code extension, since that extension drives CMake itself
+and offers no way to add configure arguments:
+
+```powershell
+# Windows, permanent for your user account. Restart VS Code afterwards.
+setx ACCONEER_RSS_DIR "C:\dev\acconeer_a121_cortex_m33"
+```
+
+```sh
+# Linux or macOS
+export ACCONEER_RSS_DIR=/path/to/acconeer_a121_cortex_m33
+```
+
+## Building with the Pico VS Code extension
+
+The extension's build task only runs `ninja -C build`, which needs a
+`build.ninja` that CMake's *configure* step produces. If configure has not run
+or has failed, the task fails with:
+
+```
+ninja: error: loading 'build.ninja': The system cannot find the file specified.
+```
+
+That message means "configure has not succeeded", not "ninja is broken". The
+two causes are a missing `ACCONEER_RSS_DIR`, above, and a version mismatch in
+the extension block at the top of `CMakeLists.txt`:
+
+```cmake
+set(sdkVersion 2.1.1)
+set(toolchainVersion 14_2_Rel1)
+set(picotoolVersion 2.1.1)
+```
+
+Those must match what is installed under `%USERPROFILE%\.pico-sdk`. Look in
+`.pico-sdk\sdk`, `.pico-sdk\toolchain` and `.pico-sdk\picotool` to see what you
+have. Running "Raspberry Pi Pico: Configure CMake" from the command palette
+makes the extension rewrite them for you.
+
+To see why configure actually failed — the extension can be quiet about it —
+run it yourself from a terminal in the project folder, substituting your own
+versions:
+
+```powershell
+cmake -S . -B build -G Ninja `
+  -DCMAKE_MAKE_PROGRAM="$env:USERPROFILE/.pico-sdk/ninja/v1.13.2/ninja.exe" `
+  -DPICO_SDK_PATH="$env:USERPROFILE/.pico-sdk/sdk/2.1.1" `
+  -DPICO_TOOLCHAIN_PATH="$env:USERPROFILE/.pico-sdk/toolchain/14_2_Rel1" `
+  -DACCONEER_RSS_DIR="C:/dev/acconeer_a121_cortex_m33"
+```
+
+CMake will then say plainly what is missing. Once that succeeds, the extension's
+build task works normally, as does `cmake --build build`.
+
+If you have no RSS SDK yet there is no way to build the firmware at all, since
+RSS is the sensor driver. The host test suite under `test/` needs neither it nor
+the Pico SDK, so that is the part to work on meanwhile.
+
 ## The float ABI
 
 This is the one thing likely to bite, so it is worth understanding rather than

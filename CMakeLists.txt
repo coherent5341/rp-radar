@@ -10,6 +10,33 @@
 #
 cmake_minimum_required(VERSION 3.13)
 
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+# The extension rewrites the three version numbers below to match what it has
+# installed, and pico-vscode.cmake then supplies PICO_SDK_PATH,
+# PICO_TOOLCHAIN_PATH and picotool. Without this block the extension's configure
+# step has no SDK to point at, so no build.ninja is produced and the build task
+# fails with "loading 'build.ninja': The system cannot find the file specified".
+#
+# If configure complains that a version is missing, check what you actually have
+# under ~/.pico-sdk (%USERPROFILE%\.pico-sdk on Windows) and correct these, or
+# re-run "Raspberry Pi Pico: Configure CMake" and let the extension set them.
+#
+# Building from the command line instead? This block is a no-op when
+# pico-vscode.cmake is absent, so PICO_SDK_PATH works as usual.
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.1.1)
+set(toolchainVersion 14_2_Rel1)
+set(picotoolVersion 2.1.1)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
+
 # RP2350, Cortex-M33. Override with -DPICO_BOARD=... for a different RP2350
 # board; the pin assignment lives in src/board/t_radar_pins.h either way.
 set(PICO_PLATFORM rp2350 CACHE STRING "Pico platform")

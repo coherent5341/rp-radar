@@ -20,6 +20,18 @@
 
 set(ACCONEER_RSS_DIR "" CACHE PATH "Root of the unpacked Acconeer A121 Cortex-M33 SDK")
 
+# Fall back to the environment when no -D was given. The Raspberry Pi Pico VS
+# Code extension drives CMake itself and offers no way to add configure
+# arguments, so setting ACCONEER_RSS_DIR once as a user environment variable is
+# the only way to make that workflow find the SDK.
+if(NOT ACCONEER_RSS_DIR AND DEFINED ENV{ACCONEER_RSS_DIR})
+    set(ACCONEER_RSS_DIR "$ENV{ACCONEER_RSS_DIR}")
+    message(STATUS "Using ACCONEER_RSS_DIR from the environment: ${ACCONEER_RSS_DIR}")
+endif()
+
+# Windows paths arrive with backslashes, which CMake treats as escapes.
+file(TO_CMAKE_PATH "${ACCONEER_RSS_DIR}" ACCONEER_RSS_DIR)
+
 option(RP_RADAR_RSS_STUB
        "Link a local stub instead of the real RSS library. Builds and links, but \
 does nothing at runtime; useful only to check the toolchain and this project's \
@@ -39,8 +51,12 @@ find_path(ACCONEER_RSS_INCLUDE_DIR
 if(NOT ACCONEER_RSS_INCLUDE_DIR)
     message(FATAL_ERROR
         "Could not find the Acconeer RSS headers (looked for acc_rss_a121.h).\n"
-        "Set -DACCONEER_RSS_DIR=/path/to/the/unpacked/A121/Cortex-M33/SDK.\n"
-        "See docs/02-rss-library.md for where to get it.")
+        "Either configure with -DACCONEER_RSS_DIR=/path/to/the/unpacked/A121/"
+        "Cortex-M33/SDK, or set ACCONEER_RSS_DIR as an environment variable, "
+        "which is what the Pico VS Code extension needs since it passes no "
+        "configure arguments of its own.\n"
+        "ACCONEER_RSS_DIR is currently \"${ACCONEER_RSS_DIR}\".\n"
+        "See docs/02-rss-library.md for where to get the SDK.")
 endif()
 
 add_library(acconeer_rss_iface INTERFACE)
