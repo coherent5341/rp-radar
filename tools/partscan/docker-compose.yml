@@ -1,0 +1,17 @@
+services:
+  partscan:
+    build: .
+    image: partscan:latest
+    container_name: partscan
+    ports:
+      - "8000:8000"
+    volumes:
+      - partscan-data:/data
+    environment:
+      PARTSCAN_DB: /data/partscan.sqlite3
+      # Set this to keep flash messages working across restarts.
+      PARTSCAN_SECRET: ${PARTSCAN_SECRET:-change-me}
+    restart: unless-stopped
+
+volumes:
+  partscan-data:

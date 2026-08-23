@@ -1,0 +1,275 @@
+/* One stylesheet, no fonts or scripts fetched from anywhere: the machine that
+   runs this may well be a bench PC with no route to the internet. */
+
+:root {
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #16181d;
+  --dim: #6b7280;
+  --line: #e3e6ea;
+  --accent: #0b6bcb;
+  --ok: #0f7b45;
+  --warn: #9a6700;
+  --error: #b42318;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --panel: #1c1f25;
+    --ink: #e8eaed;
+    --dim: #9aa1ac;
+    --line: #2b3038;
+    --accent: #63a4ff;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --error: #f87171;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.bar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 650; font-size: 17px; color: var(--ink); }
+.tagline { color: var(--dim); font-size: 13px; }
+
+main { max-width: 1180px; margin: 0 auto; padding: 22px 24px 60px; }
+
+footer {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px 40px;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+/* --- scan box ---------------------------------------------------------- */
+.scanner {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.scanner label { display: block; font-size: 13px; color: var(--dim); margin-bottom: 8px; }
+.scanrow { display: flex; gap: 10px; }
+.scanner input[name="barcode"] {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+}
+.scanner input[name="barcode"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.tick { margin: 10px 0 0; font-size: 12px; }
+.tick input { margin-right: 6px; vertical-align: -1px; }
+
+button {
+  font: inherit;
+  padding: 11px 18px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+button:hover { filter: brightness(1.08); }
+button.link {
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
+button.danger { color: var(--error); }
+
+/* --- messages ---------------------------------------------------------- */
+.flashes { list-style: none; margin: 0 0 16px; padding: 0; }
+.flash {
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  margin-bottom: 8px;
+  border-left: 3px solid var(--dim);
+}
+.flash.ok { border-left-color: var(--ok); }
+.flash.warning { border-left-color: var(--warn); }
+.flash.error { border-left-color: var(--error); }
+
+/* --- summary and filters ----------------------------------------------- */
+.summary { display: flex; gap: 22px; color: var(--dim); font-size: 13px; margin-bottom: 14px; }
+.summary strong { color: var(--ink); font-size: 15px; }
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font-size: 12.5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+}
+.chip:hover { text-decoration: none; border-color: var(--accent); }
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip .count { color: var(--dim); font-variant-numeric: tabular-nums; }
+.chip.on .count { color: #e8f0fb; }
+
+.search { display: flex; gap: 8px; align-items: center; }
+.search input {
+  font: inherit;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+}
+.search button { padding: 7px 14px; }
+.clear { font-size: 12px; color: var(--dim); }
+
+/* --- table ------------------------------------------------------------- */
+table.parts {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 14px;
+}
+table.parts th, table.parts td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: baseline;
+}
+table.parts thead th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+}
+table.parts thead th a { color: inherit; }
+table.parts thead th.sorted { color: var(--ink); }
+.arrow { font-size: 9px; margin-left: 4px; vertical-align: 1px; }
+table.parts tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+table.parts tbody tr:last-child td { border-bottom: 0; }
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--mono); font-size: 13px; }
+.dim { color: var(--dim); }
+.strong { font-weight: 650; }
+.right { text-align: right; }
+.value { white-space: nowrap; }
+.package { font-variant-numeric: tabular-nums; }
+.detail { color: var(--dim); font-size: 12px; margin-left: 6px; }
+
+.tag {
+  display: inline-block;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--dim) 16%, transparent);
+  white-space: nowrap;
+}
+.cat-capacitor { background: color-mix(in srgb, #2f80ed 20%, transparent); }
+.cat-resistor { background: color-mix(in srgb, #e2a03f 24%, transparent); }
+.cat-inductor { background: color-mix(in srgb, #9b51e0 20%, transparent); }
+.cat-ferritebead { background: color-mix(in srgb, #7b61ff 18%, transparent); }
+.cat-diode { background: color-mix(in srgb, #eb5757 20%, transparent); }
+.cat-led { background: color-mix(in srgb, #f2c94c 26%, transparent); }
+.cat-transistor { background: color-mix(in srgb, #ef6c9c 20%, transparent); }
+.cat-integratedcircuit { background: color-mix(in srgb, #27ae60 20%, transparent); }
+.cat-sensor { background: color-mix(in srgb, #00b3a4 22%, transparent); }
+.cat-crystaloscillator { background: color-mix(in srgb, #56ccf2 24%, transparent); }
+.cat-connector { background: color-mix(in srgb, #f2994a 22%, transparent); }
+.cat-switch { background: color-mix(in srgb, #bb6bd9 20%, transparent); }
+.cat-fuse { background: color-mix(in srgb, #d94f4f 18%, transparent); }
+
+.empty { color: var(--dim); padding: 26px 4px; }
+
+/* --- component page ---------------------------------------------------- */
+.back { font-size: 13px; margin: 0 0 14px; }
+.detail-head {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 26px;
+}
+.detail-head h1 { margin: 0 0 8px; font-size: 20px; }
+.subtitle { margin: 0 0 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pill {
+  font-size: 12px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--dim);
+}
+.facts { display: flex; flex-wrap: wrap; gap: 26px; margin: 0 0 16px; }
+.facts dt { font-size: 12px; color: var(--dim); margin-bottom: 2px; }
+.facts dd { margin: 0; }
+
+.inline { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--line); }
+.inline label { font-size: 13px; color: var(--dim); }
+.inline select {
+  font: inherit;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+}
+.inline button { padding: 6px 14px; }
+.hint { font-size: 12px; color: var(--dim); }
+
+h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); margin: 0 0 10px; }
+
+.badge {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  margin-left: 6px;
+  cursor: help;
+}
+tr.raw td { padding-top: 0; border-bottom: 1px solid var(--line); }
+tr.raw summary { font-size: 12px; color: var(--dim); cursor: pointer; }
+tr.raw code { font-family: var(--mono); font-size: 11.5px; color: var(--dim); word-break: break-all; display: block; margin-top: 6px; }
+
+.danger-zone { margin-top: 26px; }

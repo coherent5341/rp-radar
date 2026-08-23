@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}partscan{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="bar">
+    <a class="brand" href="{{ url_for('index') }}">partscan</a>
+    <span class="tagline">DigiKey 2D labels &rarr; parts list</span>
+    {% block headerextra %}{% endblock %}
+  </header>
+
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul class="flashes">
+          {% for level, message in messages %}
+            <li class="flash {{ level }}">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <a href="{{ url_for('export_csv', **request.args) }}">Export CSV</a> ·
+    <a href="{{ url_for('api_components') }}">JSON</a> ·
+    <span>POST a barcode to <code>/api/scan</code></span>
+  </footer>
+</body>
+</html>
