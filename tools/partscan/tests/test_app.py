@@ -206,7 +206,8 @@ def test_api_components_lists_what_was_scanned(client):
 
 def test_api_parse_decodes_without_storing(client):
     body = client.get("/api/parse", query_string={"barcode": SAMPLE}).get_json()
-    assert body["dk_part"] == "13-CC0402BPNPO9BN8R2CT-ND"
+    assert body["supplier"] == "DigiKey"
+    assert body["supplier_part"] == "13-CC0402BPNPO9BN8R2CT-ND"
     conn = db.connect(client.application.config["DATABASE"])
     assert db.totals(conn)["scans"] == 0
 
@@ -223,3 +224,81 @@ def test_csv_export(client):
 
 def test_health(client):
     assert client.get("/healthz").get_json() == {"status": "ok"}
+
+
+# An LCSC bag of 20 pF 0402 capacitors, as their code comes off the scanner.
+LCSC_LABEL = (
+    "{pbn:PICK2409280015,on:GB2409280135,pc:C1554,pm:0402CG200J500NT,qty:100,"
+    "mc:C20, C21,cc:1,pdi:129558054,hp:12,wc:ZH}"
+)
+# A DigiKey reel of the same part number, from the other supplier.
+SAME_PART_FROM_DIGIKEY = "[)>061P0402CG200J500NT30P1276-1000-1-ND9D2438Q2504LCNQ250"
+
+
+def test_an_lcsc_code_is_read_and_stored(client):
+    page = scan(client, LCSC_LABEL).get_data(as_text=True)
+    assert "Recorded 100 x 0402CG200J500NT from LCSC" in page
+    assert "0402CG200J500NT" in page
+    assert "C1554" in page      # the LCSC catalogue code
+    assert "20 pF" in page      # classified from the part number
+    assert "0402" in page
+
+
+def test_an_lcsc_value_containing_a_comma_survives(client):
+    scan(client, LCSC_LABEL)
+    body = client.get("/component/1").get_data(as_text=True)
+    assert "C20, C21" in body
+
+
+def test_lcsc_fields_we_do_not_name_are_kept(client):
+    scan(client, LCSC_LABEL)
+    body = client.get("/component/1").get_data(as_text=True)
+    for kept in ("cc=1", "hp=12", "wc=ZH"):
+        assert kept in body
+
+
+def test_an_lcsc_scan_is_not_flagged_as_reconstructed(client):
+    scan(client, LCSC_LABEL)
+    assert "reconstructed" not in client.get("/component/1").get_data(as_text=True)
+
+
+def test_the_same_part_from_two_suppliers_is_one_component(client):
+    scan(client, LCSC_LABEL)                 # 100 from LCSC
+    scan(client, SAME_PART_FROM_DIGIKEY)     # 250 from DigiKey
+    conn = db.connect(client.application.config["DATABASE"])
+    assert db.totals(conn) == {"components": 1, "scans": 2, "parts": 350}
+    body = client.get("/component/1").get_data(as_text=True)
+    assert "LCSC" in body and "DigiKey" in body
+
+
+def test_supplier_shows_on_the_list_and_sorts(client):
+    scan(client, LCSC_LABEL)
+    scan(client, SAMPLE)
+    body = client.get("/?sort=supplier&dir=asc").get_data(as_text=True)
+    assert body.index("CC0402BPNPO9BN8R2") < body.index("0402CG200J500NT")
+    body = client.get("/?sort=supplier&dir=desc").get_data(as_text=True)
+    assert body.index("0402CG200J500NT") < body.index("CC0402BPNPO9BN8R2")
+
+
+def test_searching_finds_a_part_by_its_lcsc_code(client):
+    scan(client, LCSC_LABEL)
+    scan(client, SAMPLE)
+    body = client.get("/?q=C1554").get_data(as_text=True)
+    assert "0402CG200J500NT" in body
+    assert "CC0402BPNPO9BN8R2" not in body
+
+
+def test_api_scan_reports_the_supplier(client):
+    body = client.post("/api/scan", json={"barcode": LCSC_LABEL}).get_json()
+    assert body["barcode"]["supplier"] == "LCSC"
+    assert body["barcode"]["supplier_part"] == "C1554"
+    assert body["barcode"]["customer_part"] == "C20, C21"
+    assert body["barcode"]["extra"] == {"cc": "1", "hp": "12", "wc": "ZH"}
+    assert body["component"]["value_text"] == "20 pF"
+
+
+def test_csv_export_names_the_supplier(client):
+    scan(client, LCSC_LABEL)
+    lines = client.get("/export.csv").get_data(as_text=True).splitlines()
+    assert "supplier" in lines[0] and "supplier_part" in lines[0]
+    assert "LCSC" in lines[1] and "C1554" in lines[1]

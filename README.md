@@ -26,7 +26,7 @@ service API and the example applications untouched. That port is
 | `src/apps/ball_speed/` | Demo 2: club-head speed, ball speed, smash factor per shot |
 | `test/` | Host test suite for the DSP, with synthetic golf shots |
 | `tools/` | Serial monitor and plotting |
-| `tools/partscan/` | Bench parts list: scans DigiKey 2D labels into a database, sorted by component. Python and Docker, unrelated to the firmware |
+| `tools/partscan/` | Bench parts list: scans DigiKey and LCSC codes into a database, sorted by component. Python and Docker, unrelated to the firmware |
 | `docs/` | Wiring, getting RSS, the radar configuration, running the demos |
 
 ## Quick start

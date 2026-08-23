@@ -9,9 +9,9 @@ from partscan.barcode import EOT, GS, RS, BarcodeError, describe_date_code, pars
 EXPECTED = {
     "customer_part": "C50,C51",
     "mfr_part": "CC0402BPNPO9BN8R2",
-    "dk_part": "13-CC0402BPNPO9BN8R2CT-ND",
+    "supplier_part": "13-CC0402BPNPO9BN8R2CT-ND",
     "purchase_order": "",
-    "sales_order": "100273272",
+    "order_no": "100273272",
     "invoice": "128845720",
     "date_code": "2336",
     "lot_code": "89M3336039",
@@ -137,7 +137,7 @@ def packed_label(mfr, dk, quantity, date_code="2418", lot="A1B2C3", country="TW"
 def test_identifiers_buried_in_part_numbers_do_not_split_them(mfr, dk):
     code = parse(packed_label(mfr, dk, 200))
     assert code.get("mfr_part") == mfr
-    assert code.get("dk_part") == dk
+    assert code.get("supplier_part") == dk
     assert code.quantity == 200
     assert code.get("purchase_order") == ""
     assert code.get("country") == "TW"
@@ -148,7 +148,7 @@ def test_a_reel_with_a_purchase_order_keeps_it():
     text = text.replace("30P13-CC0402BPNPO9BN8R2CT-NDK1K", "30P13-CC0402BPNPO9BN8R2CT-NDKPO123451K")
     code = parse(text)
     assert code.get("purchase_order") == "PO12345"
-    assert code.get("dk_part") == "13-CC0402BPNPO9BN8R2CT-ND"
+    assert code.get("supplier_part") == "13-CC0402BPNPO9BN8R2CT-ND"
 
 
 def test_a_long_paste_is_refused_rather_than_searched():
@@ -166,3 +166,39 @@ def test_an_unreasonable_label_still_returns_quickly():
         except BarcodeError:
             pass
     assert time.perf_counter() - start < 2.0
+
+
+# A second real label: a reel of Panasonic 1 kOhm 0805s. It carries no DigiKey
+# part number, no date code and no lot, and its customer field holds two
+# reference designators with a comma and a space between them.
+ERJ_LABEL = (
+    "[)>06PR1, R31PERJ-6ENF1001VK1K6544643310K7540567211K14LCNQ611ZPICK"
+    "12Z11895713Z25924920Z" + "0" * 182
+)
+
+
+def test_a_label_missing_the_optional_fields():
+    code = parse(ERJ_LABEL)
+    assert code.supplier == "DigiKey"
+    assert code.get("mfr_part") == "ERJ-6ENF1001V"
+    assert code.get("customer_part") == "R1, R3"
+    assert code.quantity == 6
+    assert code.get("country") == "CN"
+    assert code.get("order_no") == "65446433"
+    assert code.get("invoice") == "75405672"
+    # Absent on this label, and absent is not the same as wrong.
+    assert code.get("supplier_part") == ""
+    assert code.get("date_code") == ""
+    assert code.get("lot_code") == ""
+
+
+def test_the_two_real_labels_classify():
+    from partscan.classify import classify
+
+    erj = parse(ERJ_LABEL)
+    guess = classify(erj.get("mfr_part"), erj.get("supplier_part"), erj.supplier)
+    assert (guess.category, guess.package, guess.value_text) == ("Resistor", "0805", "1 kΩ")
+
+    reel = parse(SAMPLE)
+    guess = classify(reel.get("mfr_part"), reel.get("supplier_part"), reel.supplier)
+    assert (guess.category, guess.package, guess.value_text) == ("Capacitor", "0402", "8.2 pF")

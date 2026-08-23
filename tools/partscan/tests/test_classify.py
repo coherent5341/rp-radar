@@ -26,6 +26,11 @@ from partscan.classify import classify, format_capacitance, format_resistance
         ("ERJ-2RKF1002X", "Resistor", "0402", "10 kΩ"),
         ("ERJ-3GEYJ103V", "Resistor", "0603", "10 kΩ"),
         ("RMCF0805JT4K70", "Resistor", "0805", "4.7 kΩ"),
+        # size-first part numbers, the form LCSC's own stock uses
+        ("0402CG200J500NT", "Capacitor", "0402", "20 pF"),
+        ("0603X7R104K500NT", "Capacitor", "0603", "100 nF"),
+        ("0402WGF1002TCE", "Resistor", "0402", "10 kΩ"),
+        ("0603WAF4701T5E", "Resistor", "0603", "4.7 kΩ"),
         ("CRCW0603100RFKEA", "Resistor", "0603", "100 Ω"),
         ("CRCW04021R00FKED", "Resistor", "0402", "1 Ω"),
         ("ERJ-2RKF4991X", "Resistor", "0402", "4.99 kΩ"),
@@ -52,6 +57,13 @@ def test_passives(mpn, category, package, value):
         ("LTST-C170KGKT", "LED"),
         ("BSS138", "Transistor"),
         ("MMBT3904-7-F", "Transistor"),
+        ("SS8050", "Transistor"),      # the ones LCSC sells by the thousand
+        ("S8550", "Transistor"),
+        ("S9013", "Transistor"),
+        ("AO3400A", "Transistor"),
+        ("SS14", "Diode"),             # still a Schottky, not a transistor
+        ("0402CG200J500NT", "Capacitor"),
+        ("0402WGF1002TCE", "Resistor"),
         ("STM32F103C8T6", "Integrated circuit"),
         ("W25Q128JVSIQ", "Integrated circuit"),
         ("SN74LVC1G14DBVR", "Integrated circuit"),
@@ -67,6 +79,16 @@ def test_categories(mpn, category):
     assert classify(mpn).category == category
 
 
+def test_an_lcsc_catalogue_code_is_not_used_as_a_part_number():
+    # C1554 says nothing about the part, and C2512 would otherwise read as a
+    # case code. Better to know nothing than to invent it.
+    for code in ("C1554", "C2512", "C25804"):
+        result = classify("", code, "LCSC")
+        assert result.category == "Other"
+        assert result.package == ""
+        assert result.value_text == ""
+
+
 def test_the_digikey_number_is_used_when_there_is_no_manufacturer_one():
     result = classify("", "13-CC0402BPNPO9BN8R2CT-ND")
     assert result.category == "Capacitor"
@@ -76,6 +98,7 @@ def test_the_digikey_number_is_used_when_there_is_no_manufacturer_one():
 
 def test_dielectric_is_reported():
     assert classify("CC0402KRX7R9BB104").detail == "X7R"
+    assert classify("0402CG200J500NT").detail == "C0G/NP0"
     assert classify("C1608C0G1H103J080AA").detail == "C0G/NP0"
 
 

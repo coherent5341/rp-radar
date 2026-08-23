@@ -13,10 +13,10 @@
 {% block content %}
 <form class="scanner" method="post" action="{{ url_for('scan') }}">
   <input type="hidden" name="next" value="{{ request.full_path }}">
-  <label for="barcode">Scan or paste a DigiKey label</label>
+  <label for="barcode">Scan or paste a label &mdash; a DigiKey reel or an LCSC bag</label>
   <div class="scanrow">
     <input id="barcode" name="barcode" autocomplete="off" autofocus spellcheck="false"
-           placeholder="[)&gt;06P...1P...30P...Q10...">
+           placeholder="[)&gt;06P...1P...30P...Q10...   or   {pc:C1554,pm:...,qty:100}">
     <button type="submit">Record</button>
   </div>
   <label class="tick"><input type="checkbox" name="force"> record duplicates</label>
@@ -57,7 +57,7 @@
       {{ column('package', 'Package') }}
       {{ column('value', 'Value', 'num') }}
       {{ column('mfr_part', 'Manufacturer part') }}
-      {{ column('dk_part', 'DigiKey part') }}
+      {{ column('supplier_part', 'Supplier part') }}
       {{ column('quantity', 'Qty', 'num') }}
       {{ column('scans', 'Scans', 'num') }}
       {{ column('last_scan', 'Last scan') }}
@@ -71,10 +71,15 @@
         <td class="num value">{{ item.value_text or '—' }}{% if item.detail %} <span class="detail">{{ item.detail }}</span>{% endif %}</td>
         <td class="mono"><a href="{{ url_for('component', component_id=item.id) }}">{{ item.mfr_part or item.dk_part }}</a>
           {% if item.customer_part %}<span class="detail">{{ item.customer_part }}</span>{% endif %}</td>
-        <td class="mono dim">{{ item.dk_part or '—' }}</td>
+        <td class="mono dim">
+          {% for name in (item.suppliers or item.supplier).split(',') if name %}
+            <span class="supplier s-{{ name | lower }}">{{ name }}</span>
+          {% endfor %}
+          {{ item.supplier_part or '—' }}
+        </td>
         <td class="num strong">{{ item.total_quantity }}</td>
         <td class="num dim">{{ item.scan_count }}</td>
-        <td class="dim">{{ item.last_scan | timestamp }}</td>
+        <td class="dim when">{{ item.last_scan | timestamp }}</td>
       </tr>
     {% endfor %}
   </tbody>

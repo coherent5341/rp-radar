@@ -1,15 +1,17 @@
 # partscan
 
-A small web application that reads the 2D barcode DigiKey prints on its packing
-labels, stores what it says, and keeps a parts list you can sort. Python and
-SQLite, in a container.
+A small web application that reads the code off a parts bag or reel — DigiKey's
+2D label or LCSC's — stores what it says, and keeps a parts list you can sort.
+Python and SQLite, in a container.
 
-Scan a label into the box, and the reel is on the list — categorised, with its
-package and its value worked out from the part number:
+Scan one into the box, and it is on the list, categorised, with its package and
+its value worked out from the part number:
 
     [)>06PC50,C511PCC0402BPNPO9BN8R230P13-CC0402BPNPO9BN8R2CT-NDK1K10027327210K...
-
     Capacitor · 0402 · 8.2 pF · CC0402BPNPO9BN8R2 · 13-CC0402BPNPO9BN8R2CT-ND · 10
+
+    {pbn:PICK2409280015,on:GB2409280135,pc:C1554,pm:0402CG200J500NT,qty:100,...}
+    Capacitor · 0402 · 20 pF · 0402CG200J500NT · C1554 · 100
 
 ## Running it
 
@@ -36,10 +38,11 @@ pip install -r requirements-dev.txt && python -m pytest
 
 ## Scanning
 
-The scan box is the first thing focused on the page. A keyboard-wedge scanner
-types the whole label and presses Enter, which submits the form, so scanning a
-box of reels is scan, scan, scan with nothing to click. Pasting the text works
-the same way.
+The scan box is the first thing focused on the page, and it takes either
+supplier's code — they look nothing alike, so there is nothing to choose. A
+keyboard-wedge scanner types the whole label and presses Enter, which submits
+the form, so scanning a box of reels is scan, scan, scan with nothing to click.
+Pasting the text works the same way.
 
 Scanning the same physical label twice is caught and refused — that is nearly
 always a double trigger rather than two reels. Tick **record duplicates** when
@@ -48,7 +51,15 @@ it really is two.
 A label is a receipt: this reel, this lot, this many parts. Scans are kept
 individually, and two labels for the same part number join the same component,
 whose quantity is the sum. The component page lists the scans behind it, each
-with its date code, lot and order numbers, and the raw label it came from.
+with where it came from, its date code, lot and order numbers, and the raw
+label itself.
+
+A component is the **manufacturer** part number, not the supplier's catalogue
+number, so a reel of 0402CG200J500NT from DigiKey and a bag of the same from
+LCSC are one line on the list with both counted — which is the point of sorting
+by component. Both suppliers' badges show on the row, and each scan keeps the
+code it was bought under. Only a label with no manufacturer part number on it
+falls back to being identified by the supplier's own code.
 
 ## Sorting
 
@@ -61,7 +72,8 @@ sorts, and clicking the sorted one reverses it:
 | Category | Everything of one kind together, then package, then value |
 | Package | All the 0402s, whatever they are |
 | Value | Numeric — 8.2 pF, 100 nF, 10 µF, in that order, not alphabetical |
-| Manufacturer part, DigiKey part | Alphabetical, for looking one up |
+| Manufacturer part, Supplier part | Alphabetical, for looking one up |
+| Supplier | Everything from one supplier together |
 | Qty | What you have most and least of |
 | Scans, Last scan | What has been coming in |
 
@@ -70,6 +82,7 @@ than interleaving with the ones that have them. The category chips filter, the
 search box matches any of the part numbers, and both survive a re-sort.
 
 ## What is in a DigiKey label
+
 
 The barcode is an ISO/IEC 15434 "format 06" message carrying ANSI MH10.8.2 data
 identifiers:
@@ -117,6 +130,37 @@ out, that is why, and the raw label is kept on the component page so you can
 see for yourself. A part number consisting entirely of data identifiers would
 also defeat it, though no such part number exists.
 
+## What is in an LCSC code
+
+Nothing standards-based at all — a brace-wrapped list of key:value pairs, in
+plain text, which is far easier to read than a label whose separators have been
+stripped:
+
+    {pbn:PICK2409280015,on:GB2409280135,pc:C1554,pm:0402CG200J500NT,qty:100,
+     mc:C20, C21,cc:1,pdi:129558054,hp:12,wc:ZH}
+
+| | | |
+|---|---|---|
+| `pc` | LCSC part code | `C1554` |
+| `pm` | Product model | the manufacturer part number |
+| `mc` | Customer's own code | here, the designators `C20, C21` |
+| `qty` | Quantity | |
+| `on` | Order number | `GB2409280135` |
+| `pdi` | LCSC's product id | |
+| `pbn` | Pick batch number | `PICK2409280015` |
+| `cc` `hp` `wc` | undocumented | kept exactly as printed |
+
+The one catch is that a value may itself contain a comma — `mc` above holds two
+reference designators — so splitting on every comma would cut the field in half
+and leave `C21` looking like a key. Fields are divided at the commas followed by
+a `key:`, and nowhere else.
+
+`cc`, `hp` and `wc` are on every bag and LCSC document none of them, so they are
+stored under their own names and shown on the component page beneath the raw
+code rather than being guessed at. (`wc:ZH` is a warehouse code, not a country,
+and it must not end up in the country column.) An LCSC bag carries no date code,
+lot or country at all; those columns stay empty rather than being invented.
+
 ## What it works out about a part
 
 DigiKey's label carries no description, so the category, package and value are
@@ -127,10 +171,16 @@ series that use four-digit codes.
 
 Covered: MLCCs and electrolytics from Yageo, Murata, Samsung, TDK, KEMET and
 AVX; resistors from Yageo, Vishay, Panasonic, Stackpole, KOA, Rohm and Bourns;
-Murata and Vishay inductors and ferrite beads; and the category alone for
-diodes, LEDs, transistors, ICs, sensors, crystals, connectors, switches and
-fuses. Dielectric is reported when the part number spells it out (`X7R`,
-`C0G`); Murata's own dielectric codes are not decoded.
+Murata and Vishay inductors and ferrite beads; the size-first part numbers the
+Chinese makers LCSC stocks use, where the case code comes first and the
+dielectric after it (`0402CG200J500NT`, `0402WGF1002TCE`); and the category
+alone for diodes, LEDs, transistors, ICs, sensors, crystals, connectors,
+switches and fuses. Dielectric is reported when the part number spells it out
+(`X7R`, `C0G`, `CG`); Murata's own dielectric codes are not decoded.
+
+An LCSC part code is a catalogue number and says nothing about the part, so
+unlike a DigiKey number it is never used as a substitute for a missing
+manufacturer part number — `C2512` is a product id, not a 2512 case code.
 
 Anything not in the table is `Other`, with no package and no value. That is
 deliberate — a wrong value is worse than none, and it is what sorts to the end
@@ -141,7 +191,7 @@ component page has a dropdown to correct it when the guess is wrong.
 
 | | |
 |---|---|
-| `POST /api/scan` | `{"barcode": "[)>06..."}` — decodes, stores, returns the label and what was made of it. 201 for a new scan, 200 with `duplicate: true` for one already recorded, 400 for something unreadable. `{"force": true}` records a duplicate anyway |
+| `POST /api/scan` | `{"barcode": "[)>06..."}` or `{"barcode": "{pc:C1554,...}"}` — decodes, stores, returns the code, which supplier it was read as, and what was made of it. 201 for a new scan, 200 with `duplicate: true` for one already recorded, 400 for something unreadable. `{"force": true}` records a duplicate anyway |
 | `GET /api/parse` | `?barcode=...` — decode without storing, for checking a label by hand |
 | `GET /api/components` | The parts list as JSON. Takes the same `sort`, `dir`, `category` and `q` as the page |
 | `GET /export.csv` | The parts list as CSV, filtered and sorted the same way |
@@ -152,6 +202,13 @@ Enough for a bench script that pushes a USB scanner's output straight at
 a browser.
 
 ## Notes
+
+The database records its schema version and brings itself forward when it is
+opened, so a parts list scanned with an earlier version keeps its scans. The
+version that only knew about DigiKey keyed components on the DigiKey part
+number; on upgrade those rows are re-keyed on the manufacturer part number,
+which merges any that were separate only because the same part had been bought
+under two DigiKey numbers.
 
 There is no authentication, and none of this is written for the open internet —
 it is a thing to run on the bench, on a machine you already trust. The database

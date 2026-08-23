@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import os
 import sqlite3
 from typing import Any, Dict, Optional
@@ -47,6 +48,14 @@ def create_app(database: Optional[str] = None) -> Flask:
     @app.template_filter("date_code")
     def _date_code(value: str) -> str:
         return describe_date_code(value)
+
+    @app.template_filter("fromjson")
+    def _fromjson(value: str) -> Dict[str, Any]:
+        """The fields a supplier prints that we deliberately do not name."""
+        try:
+            return json.loads(value or "{}")
+        except ValueError:
+            return {}
 
     # ---- pages ----------------------------------------------------------
     @app.get("/")
@@ -103,8 +112,7 @@ def create_app(database: Optional[str] = None) -> Flask:
             return redirect(back)
 
         code = result["barcode"]
-        part = code.get("mfr_part") or code.get("dk_part")
-        flash(f"Recorded {code.quantity} x {part}", "ok")
+        flash(f"Recorded {code.quantity} x {code.part} from {code.supplier}", "ok")
         return redirect(back)
 
     @app.post("/component/<int:component_id>/category")
@@ -149,7 +157,7 @@ def create_app(database: Optional[str] = None) -> Flask:
             "scan_id": result["scan_id"],
             "barcode": code.as_dict(),
             "component": classify.classify(
-                code.get("mfr_part"), code.get("dk_part"), code.get("customer_part")
+                code.get("mfr_part"), code.get("supplier_part"), code.supplier
             ).as_dict(),
         }
         return jsonify(body), 200 if result["duplicate"] else 201
@@ -182,8 +190,9 @@ def create_app(database: Optional[str] = None) -> Flask:
             request.args.get("category", ""),
             request.args.get("q", "").strip(),
         )
-        columns = ["category", "package", "value_text", "mfr_part", "dk_part",
-                   "customer_part", "detail", "total_quantity", "scan_count", "last_scan"]
+        columns = ["category", "package", "value_text", "mfr_part", "supplier",
+                   "supplier_part", "customer_part", "detail", "total_quantity",
+                   "scan_count", "last_scan"]
         buffer = io.StringIO()
         writer = csv.writer(buffer)
         writer.writerow(columns)

@@ -51,6 +51,8 @@ _SERIES: Tuple[Tuple[str, str, str], ...] = (
     (r"^(VJ|MC\d{4})", "Capacitor", "mlcc"),                        # Vishay
     (r"^(TAJ|TPS[A-E]\d|T49\d|T52\d|T35\d|F98)", "Capacitor", "mlcc"),  # tantalum / polymer
     (r"^(ECQ|ECW|R7\d|B32|MKP|PHE|F339)", "Capacitor", "mlcc"),     # film
+    (r"^(0075|0100|0201|0402|0603|0805|1206|1210|1812|2220|2225)"
+     r"(C0G|CG|NP0|X7R|X5R|X7S|X6S|Y5V|Z5U|[BF]\d)", "Capacitor", "mlcc"),  # Fenghua and the like
     (r"(C0G|NP0|X7R|X5R|X7S|X6S|Y5V|Z5U|X7T)", "Capacitor", "mlcc"),  # dielectric anywhere
     # --- resistors --------------------------------------------------------
     (r"^ERJ", "Resistor", "eia_tail"),                              # Panasonic
@@ -59,6 +61,7 @@ _SERIES: Tuple[Tuple[str, str, str], ...] = (
     (r"^(CRCW|RCWE|WSL|WSLP|LVK|MCT\d|MCS\d|MCA\d)", "Resistor", "rkm"),  # Vishay
     (r"^(RMCF|RMCP|RNCF|RNCP|CSR\d|CSNL|RNCS)", "Resistor", "rkm"), # Stackpole
     (r"^(CR\d{4}|CRL|CRM|CRA|PWR\d)", "Resistor", "rkm"),           # Bourns
+    (r"^(0075|0100|0201|0402|0603|0805|1206|1210|1812|2010|2512)W[A-Z]{2}", "Resistor", "eia_tail"),  # Uniroyal and the like
     # --- magnetics --------------------------------------------------------
     (r"^(BLM|MPZ|MMZ|BK\d|HZ\d|742\d{3})", "Ferrite bead", ""),
     (r"^(LQ[WGHMP]|DFE|NLV|NLC|MLZ|MLF|MLK|SRN|SRR|SRP|SRU|IHLP|XAL|XFL|XGL|SLF|VLS|CBC|LPS|MSS|744\d)", "Inductor", "inductor"),
@@ -66,7 +69,7 @@ _SERIES: Tuple[Tuple[str, str, str], ...] = (
     # --- discretes --------------------------------------------------------
     (r"^(LTST|LTW-|SML-|APT\d|APHHS|WP\d|LNJ|VLM|HSMH|HSMG|151\d{3}|597-)", "LED", ""),
     (r"^(1N\d|BAT\d|BAV\d|BAS\d|BAW\d|BZX|BZT|MMSZ|MMBD|MBR|SS1|SS2|SS3|PMEG|RB\d|CDBU|CDSU|SMAJ|SMBJ|SMCJ|SMF\d|PESD|ESD\d|DFLS)", "Diode", ""),
-    (r"^(2N\d|MMBT|BC8|BC[45]\d|BSS\d|BSC\d|BSZ\d|IRF|IRL|SI\d{4}|AO\d{3}|DMN\d|DMP\d|FDN\d|FDV\d|NTR\d|PMV\d|SSM\d|CSD\d)", "Transistor", ""),
+    (r"^(2N\d|MMBT|BC8|BC[45]\d|BSS\d|BSC\d|BSZ\d|IRF|IRL|SI\d{4}|AO\d{3}|DMN\d|DMP\d|FDN\d|FDV\d|NTR\d|PMV\d|SSM\d|CSD\d|SS?80\d{2}|SS?85\d{2}|S90\d{2})", "Transistor", ""),
     # --- timing -----------------------------------------------------------
     (r"^(ABM|ABLS|ABS0|ABS2|ABLNO|ASE\d|ASV\d|ASDMB|ECS-|CSTNE|CSTCE|NX\d{4}|FA-\d|SG-\d|7M-|9B-|LFXTAL|FC-\d|TSX-)", "Crystal / oscillator", ""),
     # --- sensors ----------------------------------------------------------
@@ -118,7 +121,7 @@ _ERJ_SIZES = {"1": "0201", "2": "0402", "3": "0603", "6": "0805",
               "8": "1206", "12": "1210", "14": "1210", "P08": "1206"}
 _ERJ_RE = re.compile(r"^ERJ-?(P08|P?\d{1,2})", re.IGNORECASE)
 
-_DIELECTRIC_RE = re.compile(r"(C0G|NP0|X7R|X5R|X7S|X6S|X7T|Y5V|Z5U)", re.IGNORECASE)
+_DIELECTRIC_RE = re.compile(r"(C0G|NP0|X7R|X5R|X7S|X6S|X7T|Y5V|Z5U|(?<=\d)CG)", re.IGNORECASE)
 
 # Value codes. 8R2 is 8.2, 10K0 is 10 000, and a bare 104 is 10 with four
 # zeros after it. A tolerance letter or the end of the part number is what
@@ -127,7 +130,9 @@ _TOLERANCE = "BCDFGJKMZ"
 _DECIMAL_CODE_RE = re.compile(r"(?<![0-9])(\d{1,3})R(\d{1,3})(?![0-9])", re.IGNORECASE)
 _DIGIT_CODE_RE = re.compile(rf"(?<![0-9])(\d{{3}})(?=[{_TOLERANCE}]|$)", re.IGNORECASE)
 _RKM_RE = re.compile(r"(?<![0-9])(\d{1,3})([RKM])(\d{0,3})(?![0-9])", re.IGNORECASE)
-_EIA_TAIL_RE = re.compile(r"(?<![0-9])(\d{3,4})[A-Z]{0,4}$", re.IGNORECASE)
+# The packaging suffix some makers append can carry digits of its own
+# (Uniroyal ends 0603WAF4701T5E with T5E), so it is letters-then-anything.
+_EIA_TAIL_RE = re.compile(r"(?<![0-9])(\d{3,4})(?:[A-Z][A-Z0-9]{0,3})?$", re.IGNORECASE)
 _INDUCTOR_RE = re.compile(r"(?<![0-9])(\d{1,3})([NR])(\d{0,2})(?![0-9])", re.IGNORECASE)
 
 _RKM_MULTIPLIER = {"R": 1.0, "K": 1e3, "M": 1e6}
@@ -154,18 +159,21 @@ class Classification:
         }
 
 
-def classify(mfr_part: str = "", dk_part: str = "", customer_part: str = "") -> Classification:
+def classify(mfr_part: str = "", supplier_part: str = "", supplier: str = "") -> Classification:
     """Categorise a part from its part numbers. Never raises."""
     mpn = (mfr_part or "").strip()
     # A DigiKey number is usually the manufacturer number with a vendor prefix
     # and a packaging suffix bolted on, so it stands in when there is no MPN.
-    subject = mpn or strip_dk_decoration(dk_part or "")
+    # An LCSC code is a catalogue number -- C1554 says nothing about the part
+    # -- so there is nothing to fall back on.
+    fallback = "" if _is_catalogue_code(supplier_part, supplier) else strip_dk_decoration(supplier_part or "")
+    subject = mpn or fallback
     if not subject:
         return Classification()
 
     category, family = _match_series(subject)
-    if not category:
-        category, family = _match_series(strip_dk_decoration(dk_part or ""))
+    if not category and fallback:
+        category, family = _match_series(fallback)
     result = Classification(category=category or UNKNOWN)
 
     package, body = _split_package(subject)
@@ -174,12 +182,17 @@ def classify(mfr_part: str = "", dk_part: str = "", customer_part: str = "") -> 
     dielectric = _DIELECTRIC_RE.search(subject)
     if dielectric:
         code = dielectric.group(1).upper()
-        result.detail = "C0G/NP0" if code in ("C0G", "NP0") else code
+        result.detail = "C0G/NP0" if code in ("C0G", "NP0", "CG") else code
 
     value = _value(result.category, family, body)
     if value is not None:
         result.value_num, result.value_text = value
     return result
+
+
+def _is_catalogue_code(supplier_part: str, supplier: str) -> bool:
+    """LCSC part codes are the letter C and a number, and nothing else."""
+    return supplier.upper() == "LCSC" or bool(re.fullmatch(r"C\d{1,7}", (supplier_part or "").strip()))
 
 
 def strip_dk_decoration(dk_part: str) -> str:
