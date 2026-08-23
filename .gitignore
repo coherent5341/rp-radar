@@ -8,8 +8,6 @@ build-*/
 *.map
 __pycache__/
 *.pyc
-.pytest_cache/
-*.sqlite3
 *.csv
 .vscode/
 .idea/
